@@ -38,7 +38,15 @@ body {
   margin-top: 0.25rem;
 }
 
-.messages {
+/* Thread */
+.thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.thread-viewport {
   flex: 1;
   overflow-y: auto;
   display: flex;
@@ -49,12 +57,12 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
+/* Messages */
 .message {
   max-width: 85%;
   padding: 0.75rem 1rem;
   border-radius: 12px;
   line-height: 1.5;
-  white-space: pre-wrap;
   word-wrap: break-word;
 }
 
@@ -70,24 +78,47 @@ body {
   backdrop-filter: blur(10px);
 }
 
-.message.tool {
-  align-self: center;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  font-size: 0.8rem;
-  opacity: 0.7;
-  padding: 0.4rem 0.8rem;
-  border-radius: 20px;
+.message.assistant p {
+  margin: 0.4em 0;
 }
 
-.input-bar {
+.message.assistant p:first-child {
+  margin-top: 0;
+}
+
+.message.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.message.assistant code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.message.assistant pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.75rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.message.assistant pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Composer */
+.composer {
   display: flex;
   gap: 0.5rem;
   padding-top: 1rem;
   flex-shrink: 0;
 }
 
-.input-bar input {
+.composer-input {
   flex: 1;
   padding: 0.75rem 1rem;
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -100,15 +131,15 @@ body {
   transition: border-color 0.2s;
 }
 
-.input-bar input::placeholder {
+.composer-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.input-bar input:focus {
+.composer-input:focus {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
-.input-bar button {
+.composer-send {
   padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 10px;
@@ -120,24 +151,75 @@ body {
   transition: background 0.2s;
 }
 
-.input-bar button:hover {
+.composer-send:hover {
   background: rgba(255, 255, 255, 0.35);
 }
 
-.input-bar button:disabled {
+.composer-send:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.effect-label {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  padding: 0.4rem 0.8rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  opacity: 0.6;
-  transition: opacity 0.5s;
+/* Weather card */
+.weather-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin: 0.5rem 0;
+  max-width: 85%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.weather-card.loading {
+  opacity: 0.7;
+}
+
+.weather-card.error {
+  border-color: rgba(255, 100, 100, 0.3);
+  color: #ffaaaa;
+}
+
+.weather-card-shimmer {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.weather-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.weather-emoji {
+  font-size: 1.5rem;
+}
+
+.weather-location {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.weather-card-temp {
+  font-size: 2.5rem;
+  font-weight: 200;
+  margin: 0.25rem 0;
+}
+
+.weather-card-conditions {
+  opacity: 0.8;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.weather-card-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
 }

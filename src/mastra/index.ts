@@ -3,6 +3,7 @@ import { Mastra } from '@mastra/core/mastra';
 import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { Observability, DefaultExporter, CloudExporter, SensitiveDataFilter } from '@mastra/observability';
+import { chatRoute } from '@mastra/ai-sdk';
 import { weatherWorkflow } from './workflows/weather-workflow';
 import { weatherAgent } from './agents/weather-agent';
 import { codeReviewAgent } from './agents/code-review-agent';
@@ -13,6 +14,11 @@ import { codeAssistant } from './agents/code-assistant';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
 
 export const mastra = new Mastra({
+  server: {
+    apiRoutes: [
+      chatRoute({ path: '/chat/:agentId' }),
+    ],
+  },
   workflows: { weatherWorkflow },
   agents: { weatherAgent, codeReviewAgent, codingAgent, codeResearchAgent, codePlanningAgent, codeAssistant },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
