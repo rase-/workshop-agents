@@ -1,6 +1,5 @@
 import { Agent } from '@mastra/core/agent';
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
-import { codeMemory } from './shared-memory';
 
 const workspace = new Workspace({
   filesystem: new LocalFilesystem({ basePath: './workspace' }),
@@ -25,6 +24,5 @@ When researching:
 Present findings clearly and concisely. Use file paths and line references. Structure your response so the reader can quickly understand the architecture and key decisions.
 
 Use workspace tools to read files, list directories, and run commands like \`grep\` or \`find\` to explore the codebase.`,
-  memory: codeMemory,
   workspace,
 });
