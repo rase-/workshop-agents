@@ -5,11 +5,16 @@ import { LibSQLStore } from '@mastra/libsql';
 import { Observability, DefaultExporter, CloudExporter, SensitiveDataFilter } from '@mastra/observability';
 import { weatherWorkflow } from './workflows/weather-workflow';
 import { weatherAgent } from './agents/weather-agent';
+import { codeReviewAgent } from './agents/code-review-agent';
+import { codingAgent } from './agents/coding-agent';
+import { codeResearchAgent } from './agents/code-research-agent';
+import { codePlanningAgent } from './agents/code-planning-agent';
+import { codeAssistant } from './agents/code-assistant';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
 
 export const mastra = new Mastra({
   workflows: { weatherWorkflow },
-  agents: { weatherAgent },
+  agents: { weatherAgent, codeReviewAgent, codingAgent, codeResearchAgent, codePlanningAgent, codeAssistant },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   storage: new LibSQLStore({
     id: "mastra-storage",
