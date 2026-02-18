@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
+import { codeMemory } from './shared-memory';
 
 const workspace = new Workspace({
   filesystem: new LocalFilesystem({ basePath: './workspace' }),
@@ -26,5 +27,6 @@ When reviewing code:
 Be direct and specific. Reference exact lines and patterns. Suggest concrete fixes, not vague improvements. Prioritize issues by severity — call out blocking problems first, then nice-to-haves.
 
 Use the workspace tools to read files, list directories, and run commands as needed to understand the codebase you are reviewing.`,
+  memory: codeMemory,
   workspace,
 });

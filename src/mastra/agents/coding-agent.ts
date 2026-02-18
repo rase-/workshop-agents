@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
+import { codeMemory } from './shared-memory';
 
 const workspace = new Workspace({
   filesystem: new LocalFilesystem({ basePath: './workspace' }),
@@ -23,5 +24,6 @@ When writing code:
 - If a file needs to be created, keep it consistent with how similar files are structured in the project
 
 Use workspace tools to read files, write code, and run commands to verify your changes.`,
+  memory: codeMemory,
   workspace,
 });

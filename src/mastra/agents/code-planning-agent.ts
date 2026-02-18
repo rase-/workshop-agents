@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
+import { codeMemory } from './shared-memory';
 
 const workspace = new Workspace({
   filesystem: new LocalFilesystem({ basePath: './workspace' }),
@@ -24,5 +25,6 @@ When planning:
 Keep plans actionable and specific. Reference file paths and function names. Avoid vague guidance like "refactor as needed" — say exactly what should change and where.
 
 Use workspace tools to read files and explore the project structure to inform your plans.`,
+  memory: codeMemory,
   workspace,
 });
