@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
+import { Memory } from '@mastra/memory';
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
-import { codeMemory } from './shared-memory';
 import { codeReviewAgent } from './code-review-agent';
 import { codingAgent } from './coding-agent';
 import { codeResearchAgent } from './code-research-agent';
@@ -33,6 +33,6 @@ For simple tasks you can skip steps. For pure questions, research alone may suff
 
 You can also use workspace tools directly to read files or run commands when you need quick context without delegating to an agent.`,
   agents: { codeReviewAgent, codingAgent, codeResearchAgent, codePlanningAgent },
-  memory: codeMemory,
+  memory: new Memory(),
   workspace,
 });
