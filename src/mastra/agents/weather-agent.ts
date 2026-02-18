@@ -21,5 +21,15 @@ export const weatherAgent = new Agent({
 `,
   model: 'openai/gpt-4o',
   tools: { weatherTool },
-  memory: new Memory(),
+  memory: new Memory({
+    options: {
+      observationalMemory: {
+        model: 'openai/gpt-4o-mini',
+        scope: 'resource',
+        observation: {
+          messageTokens: 500,
+        },
+      },
+    },
+  }),
 })
