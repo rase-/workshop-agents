@@ -193,6 +193,60 @@ body {
   background: rgba(200, 80, 80, 0.5);
 }
 
+.suspend-card {
+  align-self: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.suspend-question {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.suspend-forecast {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.suspend-forecast span {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+}
+
+.suspend-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.suspend-actions button {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.suspend-actions button:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
 .effect-label {
   position: fixed;
   bottom: 1rem;

@@ -10,6 +10,9 @@ const forecastSchema = z.object({
   location: z.string(),
 });
 
+const focusSchema = z.enum(['indoor', 'outdoor']);
+const focusedForecastSchema = forecastSchema.extend({ focus: focusSchema });
+
 function getWeatherCondition(code: number): string {
   const conditions: Record<number, string> = {
     0: 'Clear sky',
@@ -86,10 +89,37 @@ const fetchWeather = createStep({
   },
 });
 
+const awaitActivityFocus = createStep({
+  id: 'await-activity-focus',
+  description: 'Pauses to let the user pick a main focus (indoor vs outdoor) for the activity plan',
+  inputSchema: forecastSchema,
+  outputSchema: focusedForecastSchema,
+  suspendSchema: z.object({
+    forecast: forecastSchema,
+    question: z.string(),
+  }),
+  resumeSchema: z.object({
+    focus: focusSchema,
+  }),
+  execute: async ({ inputData, resumeData, suspend }) => {
+    if (!resumeData?.focus) {
+      return await suspend({
+        forecast: inputData,
+        question:
+          `Weather in ${inputData.location}: ${inputData.condition}, ` +
+          `${inputData.minTemp}–${inputData.maxTemp}°C, ` +
+          `${inputData.precipitationChance}% precipitation. ` +
+          `Which should I focus on — indoor or outdoor activities?`,
+      });
+    }
+    return { ...inputData, focus: resumeData.focus };
+  },
+});
+
 const planActivities = createStep({
   id: 'plan-activities',
-  description: 'Suggests activities based on weather conditions',
-  inputSchema: forecastSchema,
+  description: 'Suggests activities based on weather conditions and the user-selected focus',
+  inputSchema: focusedForecastSchema,
   outputSchema: z.object({
     activities: z.string(),
   }),
@@ -105,9 +135,16 @@ const planActivities = createStep({
       throw new Error('Weather agent not found');
     }
 
-    const prompt = `Based on the following weather forecast for ${forecast.location}, suggest appropriate activities:
+    const mainFocus = forecast.focus;
+    const alternative = mainFocus === 'outdoor' ? 'indoor' : 'outdoor';
+    const mainLabel = mainFocus.toUpperCase();
+    const altLabel = alternative.toUpperCase();
+
+    const prompt = `Based on the following weather forecast for ${forecast.location}, suggest appropriate activities. The user has chosen ${mainLabel} as the MAIN FOCUS for this plan — lead with ${mainFocus} activities, but DO NOT exclude ${alternative} options; include a smaller "alternatives" section at the end.
+
       ${JSON.stringify(forecast, null, 2)}
-      For each day in the forecast, structure your response exactly as follows:
+
+      Structure your response exactly as follows:
 
       📅 [Day, Month Date, Year]
       ═══════════════════════════
@@ -117,35 +154,33 @@ const planActivities = createStep({
       • Temperature: [X°C/Y°F to A°C/B°F]
       • Precipitation: [X% chance]
 
-      🌅 MORNING ACTIVITIES
-      Outdoor:
-      • [Activity Name] - [Brief description including specific location/route]
+      ⭐ MAIN FOCUS: ${mainLabel}
+
+      🌅 MORNING
+      • [Activity Name] - [Brief description including specific location/venue]
         Best timing: [specific time range]
         Note: [relevant weather consideration]
 
-      🌞 AFTERNOON ACTIVITIES
-      Outdoor:
-      • [Activity Name] - [Brief description including specific location/route]
+      🌞 AFTERNOON
+      • [Activity Name] - [Brief description including specific location/venue]
         Best timing: [specific time range]
         Note: [relevant weather consideration]
 
-      🏠 INDOOR ALTERNATIVES
-      • [Activity Name] - [Brief description including specific venue]
-        Ideal for: [weather condition that would trigger this alternative]
+      🔁 ${altLabel} ALTERNATIVES
+      • [1-2 ${alternative} options - shorter, just to round out the plan]
 
       ⚠️ SPECIAL CONSIDERATIONS
       • [Any relevant weather warnings, UV index, wind conditions, etc.]
 
       Guidelines:
-      - Suggest 2-3 time-specific outdoor activities per day
-      - Include 1-2 indoor backup options
-      - For precipitation >50%, lead with indoor activities
+      - Suggest 2-3 time-specific ${mainFocus} activities (morning + afternoon)
+      - Include 1-2 ${alternative} alternatives at the end (keep brief)
       - All activities must be specific to the location
-      - Include specific venues, trails, or locations
+      - Include specific venues, trails, or addresses where possible
       - Consider activity intensity based on temperature
       - Keep descriptions concise but informative
 
-      Maintain this exact formatting for consistency, using the emoji and section headers as shown.`;
+      Maintain this exact formatting, using the emoji and section headers as shown.`;
 
     const response = await agent.stream([
       {
@@ -155,7 +190,6 @@ const planActivities = createStep({
     ]);
 
     let activitiesText = '';
-
     for await (const chunk of response.textStream) {
       process.stdout.write(chunk);
       activitiesText += chunk;
@@ -167,18 +201,20 @@ const planActivities = createStep({
   },
 });
 
-const weatherWorkflow = createWorkflow({
-  id: 'weather-workflow',
+const planningWorkflow = createWorkflow({
+  id: 'planning-workflow',
+  description: 'Plans activities for a city based on its current weather forecast, with a human-in-the-loop step to choose an indoor or outdoor focus.',
   inputSchema: z.object({
-    city: z.string().describe('The city to get the weather for'),
+    city: z.string().describe('The city to plan activities for'),
   }),
   outputSchema: z.object({
     activities: z.string(),
   }),
 })
   .then(fetchWeather)
+  .then(awaitActivityFocus)
   .then(planActivities);
 
-weatherWorkflow.commit();
+planningWorkflow.commit();
 
-export { weatherWorkflow };
+export { planningWorkflow };

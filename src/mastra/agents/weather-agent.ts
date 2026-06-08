@@ -1,7 +1,7 @@
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 import { weatherTool } from '../tools/weather-tool'
-import { weatherWorkflow } from '../workflows/weather-workflow'
+import { planningWorkflow } from '../workflows/weather-workflow'
 
 export const weatherAgent = new Agent({
   id: 'weather-agent',
@@ -18,10 +18,13 @@ export const weatherAgent = new Agent({
       - If the user asks for activities and provides the weather forecast, suggest activities based on the weather forecast.
       - If the user asks for activities, respond in the format they request.
 
-      Use the weatherTool to fetch current weather data.
+      Tool selection:
+      - For a simple weather lookup ("what's the weather in X"), call **weatherTool**.
+      - When the user wants an activity plan, schedule, or things to do in a city — anything beyond raw conditions — call the **planningWorkflow** workflow with the city. The workflow handles fetching the forecast itself and will pause to ask the user whether to focus on indoor or outdoor activities. Do NOT call weatherTool first in this case; the workflow does its own fetch.
+      - When the planningWorkflow finishes, its result contains an 'activities' field with a markdown-formatted plan. Present that plan to the user verbatim — do not summarize, paraphrase, or truncate it. You can add a one-line intro before the plan if you like.
 `,
   model: 'openai/gpt-4o-mini',
   tools: { weatherTool },
-  workflows: { weatherWorkflow },
+  workflows: { planningWorkflow },
   memory: new Memory(),
 })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { MastraClient } from "@mastra/client-js";
 
 const client = new MastraClient({
@@ -117,6 +117,21 @@ interface PendingApproval {
   args: unknown;
 }
 
+interface PendingSuspend {
+  runId: string;
+  toolCallId: string;
+  toolName: string;
+  question: string;
+  forecast: {
+    date: string;
+    maxTemp: number;
+    minTemp: number;
+    precipitationChance: number;
+    condition: string;
+    location: string;
+  };
+}
+
 function newId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 }
@@ -127,12 +142,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [effect, setEffect] = useState("");
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+  const [pendingSuspend, setPendingSuspend] = useState<PendingSuspend | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const turnStateRef = useRef<{ assistantText: string; assistantIndex: number }>({
     assistantText: "",
     assistantIndex: -1,
   });
   const handledApprovalsRef = useRef<Set<string>>(new Set());
+  const handledSuspendsRef = useRef<Set<string>>(new Set());
   const idsRef = useRef<{ resourceId: string; threadId: string } | null>(null);
   if (!idsRef.current) {
     idsRef.current = { resourceId: newId("user"), threadId: newId("thread") };
@@ -142,112 +159,87 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleChunk = useCallback(async (chunk: { type: string; payload?: unknown; runId?: string }) => {
+    if (chunk.type === "text-delta") {
+      const text = (chunk.payload as { text: string }).text;
+      turnStateRef.current.assistantText += text;
+      const acc = turnStateRef.current.assistantText;
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (turnStateRef.current.assistantIndex === -1) {
+          turnStateRef.current.assistantIndex = updated.length;
+          updated.push({ role: "assistant", content: acc });
+        } else {
+          updated[turnStateRef.current.assistantIndex] = { role: "assistant", content: acc };
+        }
+        return updated;
+      });
+    } else if (chunk.type === "tool-result") {
+      const result = (chunk.payload as { result?: { effect?: string } }).result;
+      if (result?.effect) {
+        setEffect(result.effect);
+        setMessages((prev) => [...prev, { role: "tool", content: `Atmosphere set: ${result.effect}` }]);
+      }
+    } else if (chunk.type === "tool-call-approval") {
+      const payload = chunk.payload as { toolCallId: string; toolName: string; args: unknown };
+      const runId = chunk.runId;
+      if (runId) {
+        setPendingApproval((prev) => {
+          if (prev?.toolCallId === payload.toolCallId) return prev;
+          if (handledApprovalsRef.current.has(payload.toolCallId)) return prev;
+          return { runId, toolCallId: payload.toolCallId, toolName: payload.toolName, args: payload.args };
+        });
+        setLoading(false);
+      }
+    } else if (chunk.type === "tool-call-suspended") {
+      const payload = chunk.payload as { toolCallId: string; toolName: string; suspendPayload: { forecast: PendingSuspend["forecast"]; question: string } };
+      const runId = chunk.runId;
+      if (runId) {
+        setPendingSuspend((prev) => {
+          if (prev?.toolCallId === payload.toolCallId) return prev;
+          if (handledSuspendsRef.current.has(payload.toolCallId)) return prev;
+          return {
+            runId,
+            toolCallId: payload.toolCallId,
+            toolName: payload.toolName,
+            forecast: payload.suspendPayload.forecast,
+            question: payload.suspendPayload.question,
+          };
+        });
+        setLoading(false);
+      }
+    } else if (chunk.type === "finish") {
+      const reason = (chunk.payload as { stepResult?: { reason?: string } })?.stepResult?.reason;
+      if (reason !== "tool-calls") {
+        setLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const { resourceId, threadId } = idsRef.current!;
     const agent = client.getAgent("weather-agent");
     let cancelled = false;
     let subscription: Awaited<ReturnType<typeof agent.subscribeToThread>> | null = null;
-
     (async () => {
       try {
         subscription = await agent.subscribeToThread({ resourceId, threadId });
-        if (cancelled) {
-          subscription.unsubscribe?.();
-          return;
-        }
-        // Fire-and-forget: this resolves only when the subscription is closed.
-        void subscription.processDataStream({
-          reconnect: true,
-          onChunk: async (chunk) => {
-            if (chunk.type === "tool-call" || chunk.type === "tool-call-approval") {
-              console.log("[chunk]", chunk.type, (chunk.payload as { toolName?: string; args?: unknown })?.toolName, (chunk.payload as { args?: unknown })?.args);
-            } else if (chunk.type === "tool-result") {
-              const p = chunk.payload as { toolName?: string; toolCallId?: string; result?: unknown };
-              console.log("[chunk]", chunk.type, p?.toolName, p?.toolCallId, p?.result);
-            } else {
-              console.log("[chunk]", chunk.type);
-            }
-            if (chunk.type === "text-delta") {
-              turnStateRef.current.assistantText += chunk.payload.text;
-              const text = turnStateRef.current.assistantText;
-              setMessages((prev) => {
-                const updated = [...prev];
-                if (turnStateRef.current.assistantIndex === -1) {
-                  turnStateRef.current.assistantIndex = updated.length;
-                  updated.push({ role: "assistant", content: text });
-                } else {
-                  updated[turnStateRef.current.assistantIndex] = {
-                    role: "assistant",
-                    content: text,
-                  };
-                }
-                return updated;
-              });
-            } else if (chunk.type === "tool-result") {
-              const result = chunk.payload.result as {
-                success?: boolean;
-                effect?: string;
-              };
-              if (result?.effect) {
-                setEffect(result.effect);
-                setMessages((prev) => [
-                  ...prev,
-                  { role: "tool", content: `Atmosphere set: ${result.effect}` },
-                ]);
-              }
-            } else if (chunk.type === "tool-call-approval") {
-              const payload = chunk.payload as {
-                toolCallId: string;
-                toolName: string;
-                args: unknown;
-              };
-              const runId = (chunk as { runId?: string }).runId;
-              if (runId) {
-                // Dedupe: ignore if we've already shown approval for this toolCallId
-                // (defends against server replay or duplicate chunks).
-                setPendingApproval((prev) => {
-                  if (prev?.toolCallId === payload.toolCallId) {
-                    console.warn("[approval] duplicate tool-call-approval ignored:", payload.toolCallId);
-                    return prev;
-                  }
-                  if (handledApprovalsRef.current.has(payload.toolCallId)) {
-                    console.warn("[approval] tool-call-approval re-arrived after handling:", payload.toolCallId);
-                    return prev;
-                  }
-                  return {
-                    runId,
-                    toolCallId: payload.toolCallId,
-                    toolName: payload.toolName,
-                    args: payload.args,
-                  };
-                });
-                setLoading(false);
-              }
-            } else if (chunk.type === "finish") {
-              const reason = (chunk.payload as { stepResult?: { reason?: string } })?.stepResult?.reason;
-              if (reason !== "tool-calls") {
-                setLoading(false);
-              }
-            }
-          },
-        });
+        if (cancelled) { subscription.unsubscribe?.(); return; }
+        void subscription.processDataStream({ reconnect: true, onChunk: handleChunk });
       } catch (err) {
-        if (!cancelled) {
-          console.error("Subscription error:", err);
-        }
+        if (!cancelled) console.error("Subscription error:", err);
       }
     })();
-
     return () => {
       cancelled = true;
       subscription?.unsubscribe?.();
     };
-  }, []);
+  }, [handleChunk]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || loading || pendingApproval) return;
+    if (!text || loading || pendingApproval || pendingSuspend) return;
 
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -257,8 +249,7 @@ export default function Home() {
     try {
       const agent = client.getAgent("weather-agent");
       const { resourceId, threadId } = idsRef.current!;
-      console.log("[sendMessage]", text);
-      const result = await agent.sendMessage({
+      await agent.sendMessage({
         message: text,
         resourceId,
         threadId,
@@ -267,7 +258,6 @@ export default function Home() {
           streamOptions: { clientTools },
         },
       });
-      console.log("[sendMessage] response", result);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong";
@@ -288,15 +278,60 @@ export default function Home() {
     try {
       const agent = client.getAgent("weather-agent");
       const { resourceId, threadId } = idsRef.current!;
-      console.log("[approval] sending", { approved, toolCallId });
-      const result = await agent.sendToolApproval({
+      await agent.sendToolApproval({
         resourceId,
         threadId,
         toolCallId,
         approved,
         streamOptions: { clientTools },
       });
-      console.log("[approval] response", result);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${errorMessage}` },
+      ]);
+      setLoading(false);
+    }
+  }
+
+  async function handleFocus(focus: "indoor" | "outdoor") {
+    if (!pendingSuspend) return;
+    const { runId, toolCallId } = pendingSuspend;
+    const { resourceId, threadId } = idsRef.current!;
+    handledSuspendsRef.current.add(toolCallId);
+    setPendingSuspend(null);
+    setLoading(true);
+    try {
+      // resume-stream chunks ALSO flow through the thread subscription, so we
+      // just trigger the server-side execution here and let the subscription
+      // deliver the chunks. The response body must still be drained — if we
+      // cancel() it, the server pauses generation and we get stuck.
+      const res = await (client as unknown as {
+        request: (path: string, options: { method: string; body: unknown; stream?: boolean }) => Promise<Response>;
+      }).request("/agents/weather-agent/resume-stream", {
+        method: "POST",
+        stream: true,
+        body: {
+          runId,
+          toolCallId,
+          resumeData: { focus },
+          memory: { thread: threadId, resource: resourceId },
+          clientTools,
+        },
+      });
+      if (res.body) {
+        const reader = res.body.getReader();
+        (async () => {
+          try {
+            while (true) {
+              const { done } = await reader.read();
+              if (done) break;
+            }
+          } catch {}
+        })();
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong";
@@ -321,7 +356,7 @@ export default function Home() {
             {msg.content}
           </div>
         ))}
-        {loading && !pendingApproval && messages[messages.length - 1]?.role === "user" && (
+        {loading && !pendingApproval && !pendingSuspend && messages[messages.length - 1]?.role === "user" && (
           <div className="message assistant">Thinking...</div>
         )}
         {pendingApproval && (
@@ -340,6 +375,20 @@ export default function Home() {
             </div>
           </div>
         )}
+        {pendingSuspend && (
+          <div className="suspend-card">
+            <div className="suspend-question">{pendingSuspend.question}</div>
+            <div className="suspend-forecast">
+              <span>{pendingSuspend.forecast.condition}</span>
+              <span>{pendingSuspend.forecast.minTemp.toFixed(1)}°–{pendingSuspend.forecast.maxTemp.toFixed(1)}°C</span>
+              <span>{pendingSuspend.forecast.precipitationChance}% precip</span>
+            </div>
+            <div className="suspend-actions">
+              <button onClick={() => handleFocus("outdoor")}>🌳 Outdoor</button>
+              <button onClick={() => handleFocus("indoor")}>🏠 Indoor</button>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -349,9 +398,9 @@ export default function Home() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="What's the weather in Tokyo?"
-          disabled={loading || !!pendingApproval}
+          disabled={loading || !!pendingApproval || !!pendingSuspend}
         />
-        <button type="submit" disabled={loading || !!pendingApproval}>
+        <button type="submit" disabled={loading || !!pendingApproval || !!pendingSuspend}>
           Send
         </button>
       </form>
