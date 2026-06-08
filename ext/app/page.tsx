@@ -135,7 +135,7 @@ export default function Home() {
       });
 
       let assistantText = "";
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      let assistantIndex = -1;
 
       await response.processDataStream({
         onChunk: async (chunk) => {
@@ -143,10 +143,15 @@ export default function Home() {
             assistantText += chunk.payload.text;
             setMessages((prev) => {
               const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: "assistant",
-                content: assistantText,
-              };
+              if (assistantIndex === -1) {
+                assistantIndex = updated.length;
+                updated.push({ role: "assistant", content: assistantText });
+              } else {
+                updated[assistantIndex] = {
+                  role: "assistant",
+                  content: assistantText,
+                };
+              }
               return updated;
             });
           } else if (chunk.type === "tool-result") {
@@ -189,7 +194,7 @@ export default function Home() {
             {msg.content}
           </div>
         ))}
-        {loading && messages[messages.length - 1]?.content === "" && (
+        {loading && messages[messages.length - 1]?.role === "user" && (
           <div className="message assistant">Thinking...</div>
         )}
         <div ref={messagesEndRef} />
