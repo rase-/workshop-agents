@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent'
 import { Memory } from '@mastra/memory'
 import { weatherTool } from '../tools/weather-tool'
+import { weatherWorkflow } from '../workflows/weather-workflow'
 
 export const weatherAgent = new Agent({
   id: 'weather-agent',
@@ -21,5 +22,6 @@ export const weatherAgent = new Agent({
 `,
   model: 'openai/gpt-4o-mini',
   tools: { weatherTool },
+  workflows: { weatherWorkflow },
   memory: new Memory(),
 })
