@@ -1,317 +1,386 @@
-"use client";
+'use client'
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { MastraClient } from "@mastra/client-js";
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { MastraClient } from '@mastra/client-js'
 
 const client = new MastraClient({
-  baseUrl: "http://localhost:4111",
-});
+  baseUrl: 'http://localhost:4111',
+})
 
 function getWeatherGradient(weatherCode: number, temperature: number): string {
   // Temperature warmth factor: -10C → 0, 15C → 0.5, 40C → 1
-  const warmth = Math.max(0, Math.min(1, (temperature + 10) / 50));
+  const warmth = Math.max(0, Math.min(1, (temperature + 10) / 50))
 
   // Base gradients by weather code
-  let colors: [string, string];
+  let colors: [string, string]
 
   if (weatherCode <= 1) {
     // Clear sky
-    colors = warmth > 0.5
-      ? ["#f6d365", "#fda085"] // warm golden
-      : ["#a1c4fd", "#c2e9fb"]; // cool blue sky
+    colors =
+      warmth > 0.5
+        ? ['#f6d365', '#fda085'] // warm golden
+        : ['#a1c4fd', '#c2e9fb'] // cool blue sky
   } else if (weatherCode === 2) {
     // Partly cloudy
-    colors = ["#89b4cf", "#b8c6db"];
+    colors = ['#89b4cf', '#b8c6db']
   } else if (weatherCode === 3) {
     // Overcast
-    colors = ["#8e9eab", "#a8b5c2"];
+    colors = ['#8e9eab', '#a8b5c2']
   } else if (weatherCode <= 48) {
     // Fog
-    colors = ["#757f9a", "#d7dde8"];
+    colors = ['#757f9a', '#d7dde8']
   } else if (weatherCode <= 57) {
     // Drizzle
-    colors = ["#616d86", "#96a0b5"];
+    colors = ['#616d86', '#96a0b5']
   } else if (weatherCode <= 67 || (weatherCode >= 80 && weatherCode <= 82)) {
     // Rain
-    colors = ["#3a4f7a", "#1a2a4a"];
+    colors = ['#3a4f7a', '#1a2a4a']
   } else if (weatherCode <= 77 || (weatherCode >= 85 && weatherCode <= 86)) {
     // Snow
-    colors = ["#ccd5e0", "#8fa3b8"];
+    colors = ['#ccd5e0', '#8fa3b8']
   } else if (weatherCode >= 95) {
     // Thunderstorm
-    colors = ["#1a1a2e", "#3d2c5e"];
+    colors = ['#1a1a2e', '#3d2c5e']
   } else {
-    colors = ["#667eea", "#764ba2"];
+    colors = ['#667eea', '#764ba2']
   }
 
   // Blend warmth into the gradient for temperature feel
   if (temperature > 30) {
     // Hot: push toward orange
-    colors[0] = blendColor(colors[0], "#e8834a", 0.3);
-    colors[1] = blendColor(colors[1], "#c0392b", 0.2);
+    colors[0] = blendColor(colors[0], '#e8834a', 0.3)
+    colors[1] = blendColor(colors[1], '#c0392b', 0.2)
   } else if (temperature < 0) {
     // Freezing: push toward icy blue
-    colors[0] = blendColor(colors[0], "#74b9ff", 0.3);
-    colors[1] = blendColor(colors[1], "#0984e3", 0.2);
+    colors[0] = blendColor(colors[0], '#74b9ff', 0.3)
+    colors[1] = blendColor(colors[1], '#0984e3', 0.2)
   }
 
-  return `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
+  return `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`
 }
 
 function blendColor(hex1: string, hex2: string, factor: number): string {
-  const r1 = parseInt(hex1.slice(1, 3), 16);
-  const g1 = parseInt(hex1.slice(3, 5), 16);
-  const b1 = parseInt(hex1.slice(5, 7), 16);
-  const r2 = parseInt(hex2.slice(1, 3), 16);
-  const g2 = parseInt(hex2.slice(3, 5), 16);
-  const b2 = parseInt(hex2.slice(5, 7), 16);
-  const r = Math.round(r1 + (r2 - r1) * factor);
-  const g = Math.round(g1 + (g2 - g1) * factor);
-  const b = Math.round(b1 + (b2 - b1) * factor);
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  const r1 = parseInt(hex1.slice(1, 3), 16)
+  const g1 = parseInt(hex1.slice(3, 5), 16)
+  const b1 = parseInt(hex1.slice(5, 7), 16)
+  const r2 = parseInt(hex2.slice(1, 3), 16)
+  const g2 = parseInt(hex2.slice(3, 5), 16)
+  const b2 = parseInt(hex2.slice(5, 7), 16)
+  const r = Math.round(r1 + (r2 - r1) * factor)
+  const g = Math.round(g1 + (g2 - g1) * factor)
+  const b = Math.round(b1 + (b2 - b1) * factor)
+  return `#${r.toString(16).padStart(2, '0')}${g
+    .toString(16)
+    .padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
 }
 
 const setWeatherVibes = {
-  id: "setWeatherVibes",
+  id: 'setWeatherVibes',
   description:
-    "After retrieving weather data, call this tool to update the page atmosphere to match the current weather conditions. Always call this tool when you have weather data.",
+    'After retrieving weather data, call this tool to update the page atmosphere to match the current weather conditions. Always call this tool when you have weather data.',
   parameters: {
-    type: "object" as const,
+    type: 'object' as const,
     properties: {
-      temperature: { type: "number" as const, description: "Current temperature in Celsius" },
-      weatherCode: { type: "number" as const, description: "WMO weather code (0-99)" },
-      conditions: { type: "string" as const, description: "Human-readable weather condition" },
-      windSpeed: { type: "number" as const, description: "Wind speed in km/h" },
-      humidity: { type: "number" as const, description: "Relative humidity percentage" },
+      temperature: {
+        type: 'number' as const,
+        description: 'Current temperature in Celsius',
+      },
+      weatherCode: {
+        type: 'number' as const,
+        description: 'WMO weather code (0-99)',
+      },
+      conditions: {
+        type: 'string' as const,
+        description: 'Human-readable weather condition',
+      },
+      windSpeed: { type: 'number' as const, description: 'Wind speed in km/h' },
+      humidity: {
+        type: 'number' as const,
+        description: 'Relative humidity percentage',
+      },
     },
-    required: ["temperature", "weatherCode", "conditions", "windSpeed", "humidity"],
+    required: [
+      'temperature',
+      'weatherCode',
+      'conditions',
+      'windSpeed',
+      'humidity',
+    ],
     additionalProperties: false,
   },
   execute: async (args: {
-    temperature: number;
-    weatherCode: number;
-    conditions: string;
-    windSpeed: number;
-    humidity: number;
+    temperature: number
+    weatherCode: number
+    conditions: string
+    windSpeed: number
+    humidity: number
   }) => {
-    const gradient = getWeatherGradient(args.weatherCode, args.temperature);
-    document.body.style.background = gradient;
+    const gradient = getWeatherGradient(args.weatherCode, args.temperature)
+    document.body.style.background = gradient
     return {
       success: true,
       effect: `${args.conditions}, ${args.temperature}°C`,
-    };
+    }
   },
-};
+}
 
-const clientTools = { setWeatherVibes };
+const clientTools = { setWeatherVibes }
 
 interface Message {
-  role: "user" | "assistant" | "tool";
-  content: string;
+  role: 'user' | 'assistant' | 'tool'
+  content: string
 }
 
 interface PendingApproval {
-  runId: string;
-  toolCallId: string;
-  toolName: string;
-  args: unknown;
+  runId: string
+  toolCallId: string
+  toolName: string
+  args: unknown
 }
 
 interface PendingSuspend {
-  runId: string;
-  toolCallId: string;
-  toolName: string;
-  question: string;
+  runId: string
+  toolCallId: string
+  toolName: string
+  question: string
   forecast: {
-    date: string;
-    maxTemp: number;
-    minTemp: number;
-    precipitationChance: number;
-    condition: string;
-    location: string;
-  };
+    date: string
+    maxTemp: number
+    minTemp: number
+    precipitationChance: number
+    condition: string
+    location: string
+  }
 }
 
 function newId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+  return `${prefix}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}-${Date.now().toString(36)}`
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [effect, setEffect] = useState("");
-  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
-  const [pendingSuspend, setPendingSuspend] = useState<PendingSuspend | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const turnStateRef = useRef<{ assistantText: string; assistantIndex: number }>({
-    assistantText: "",
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [effect, setEffect] = useState('')
+  const [pendingApproval, setPendingApproval] =
+    useState<PendingApproval | null>(null)
+  const [pendingSuspend, setPendingSuspend] = useState<PendingSuspend | null>(
+    null
+  )
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const turnStateRef = useRef<{
+    assistantText: string
+    assistantIndex: number
+  }>({
+    assistantText: '',
     assistantIndex: -1,
-  });
-  const handledApprovalsRef = useRef<Set<string>>(new Set());
-  const handledSuspendsRef = useRef<Set<string>>(new Set());
-  const idsRef = useRef<{ resourceId: string; threadId: string } | null>(null);
+  })
+  const handledApprovalsRef = useRef<Set<string>>(new Set())
+  const handledSuspendsRef = useRef<Set<string>>(new Set())
+  const idsRef = useRef<{ resourceId: string; threadId: string } | null>(null)
   if (!idsRef.current) {
-    idsRef.current = { resourceId: newId("user"), threadId: newId("thread") };
+    idsRef.current = { resourceId: newId('user'), threadId: newId('thread') }
   }
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-  const handleChunk = useCallback(async (chunk: { type: string; payload?: unknown; runId?: string }) => {
-    if (chunk.type === "text-delta") {
-      const text = (chunk.payload as { text: string }).text;
-      turnStateRef.current.assistantText += text;
-      const acc = turnStateRef.current.assistantText;
-      setMessages((prev) => {
-        const updated = [...prev];
-        if (turnStateRef.current.assistantIndex === -1) {
-          turnStateRef.current.assistantIndex = updated.length;
-          updated.push({ role: "assistant", content: acc });
-        } else {
-          updated[turnStateRef.current.assistantIndex] = { role: "assistant", content: acc };
+  const handleChunk = useCallback(
+    async (chunk: { type: string; payload?: unknown; runId?: string }) => {
+      if (chunk.type === 'text-delta') {
+        const text = (chunk.payload as { text: string }).text
+        turnStateRef.current.assistantText += text
+        const acc = turnStateRef.current.assistantText
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (turnStateRef.current.assistantIndex === -1) {
+            turnStateRef.current.assistantIndex = updated.length
+            updated.push({ role: 'assistant', content: acc })
+          } else {
+            updated[turnStateRef.current.assistantIndex] = {
+              role: 'assistant',
+              content: acc,
+            }
+          }
+          return updated
+        })
+      } else if (chunk.type === 'tool-result') {
+        const result = (chunk.payload as { result?: { effect?: string } })
+          .result
+        if (result?.effect) {
+          setEffect(result.effect)
+          setMessages((prev) => [
+            ...prev,
+            { role: 'tool', content: `Atmosphere set: ${result.effect}` },
+          ])
         }
-        return updated;
-      });
-    } else if (chunk.type === "tool-result") {
-      const result = (chunk.payload as { result?: { effect?: string } }).result;
-      if (result?.effect) {
-        setEffect(result.effect);
-        setMessages((prev) => [...prev, { role: "tool", content: `Atmosphere set: ${result.effect}` }]);
+      } else if (chunk.type === 'tool-call-approval') {
+        const payload = chunk.payload as {
+          toolCallId: string
+          toolName: string
+          args: unknown
+        }
+        const runId = chunk.runId
+        if (runId) {
+          setPendingApproval((prev) => {
+            if (prev?.toolCallId === payload.toolCallId) return prev
+            if (handledApprovalsRef.current.has(payload.toolCallId)) return prev
+            return {
+              runId,
+              toolCallId: payload.toolCallId,
+              toolName: payload.toolName,
+              args: payload.args,
+            }
+          })
+          setLoading(false)
+        }
+      } else if (chunk.type === 'tool-call-suspended') {
+        const payload = chunk.payload as {
+          toolCallId: string
+          toolName: string
+          suspendPayload: {
+            forecast: PendingSuspend['forecast']
+            question: string
+          }
+        }
+        const runId = chunk.runId
+        if (runId) {
+          setPendingSuspend((prev) => {
+            if (prev?.toolCallId === payload.toolCallId) return prev
+            if (handledSuspendsRef.current.has(payload.toolCallId)) return prev
+            return {
+              runId,
+              toolCallId: payload.toolCallId,
+              toolName: payload.toolName,
+              forecast: payload.suspendPayload.forecast,
+              question: payload.suspendPayload.question,
+            }
+          })
+          setLoading(false)
+        }
+      } else if (chunk.type === 'finish') {
+        const reason = (chunk.payload as { stepResult?: { reason?: string } })
+          ?.stepResult?.reason
+        if (reason !== 'tool-calls') {
+          setLoading(false)
+        }
       }
-    } else if (chunk.type === "tool-call-approval") {
-      const payload = chunk.payload as { toolCallId: string; toolName: string; args: unknown };
-      const runId = chunk.runId;
-      if (runId) {
-        setPendingApproval((prev) => {
-          if (prev?.toolCallId === payload.toolCallId) return prev;
-          if (handledApprovalsRef.current.has(payload.toolCallId)) return prev;
-          return { runId, toolCallId: payload.toolCallId, toolName: payload.toolName, args: payload.args };
-        });
-        setLoading(false);
-      }
-    } else if (chunk.type === "tool-call-suspended") {
-      const payload = chunk.payload as { toolCallId: string; toolName: string; suspendPayload: { forecast: PendingSuspend["forecast"]; question: string } };
-      const runId = chunk.runId;
-      if (runId) {
-        setPendingSuspend((prev) => {
-          if (prev?.toolCallId === payload.toolCallId) return prev;
-          if (handledSuspendsRef.current.has(payload.toolCallId)) return prev;
-          return {
-            runId,
-            toolCallId: payload.toolCallId,
-            toolName: payload.toolName,
-            forecast: payload.suspendPayload.forecast,
-            question: payload.suspendPayload.question,
-          };
-        });
-        setLoading(false);
-      }
-    } else if (chunk.type === "finish") {
-      const reason = (chunk.payload as { stepResult?: { reason?: string } })?.stepResult?.reason;
-      if (reason !== "tool-calls") {
-        setLoading(false);
-      }
-    }
-  }, []);
+    },
+    []
+  )
 
   useEffect(() => {
-    const { resourceId, threadId } = idsRef.current!;
-    const agent = client.getAgent("weather-agent");
-    let cancelled = false;
-    let subscription: Awaited<ReturnType<typeof agent.subscribeToThread>> | null = null;
-    (async () => {
+    const { resourceId, threadId } = idsRef.current!
+    const agent = client.getAgent('weather-agent')
+    let cancelled = false
+    let subscription: Awaited<
+      ReturnType<typeof agent.subscribeToThread>
+    > | null = null
+    ;(async () => {
       try {
-        subscription = await agent.subscribeToThread({ resourceId, threadId });
-        if (cancelled) { subscription.unsubscribe?.(); return; }
-        void subscription.processDataStream({ reconnect: true, onChunk: handleChunk });
+        subscription = await agent.subscribeToThread({ resourceId, threadId })
+        if (cancelled) {
+          subscription.unsubscribe?.()
+          return
+        }
+        void subscription.processDataStream({
+          reconnect: true,
+          onChunk: handleChunk,
+        })
       } catch (err) {
-        if (!cancelled) console.error("Subscription error:", err);
+        if (!cancelled) console.error('Subscription error:', err)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-      subscription?.unsubscribe?.();
-    };
-  }, [handleChunk]);
+      cancelled = true
+      subscription?.unsubscribe?.()
+    }
+  }, [handleChunk])
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || loading || pendingApproval || pendingSuspend) return;
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || loading || pendingApproval || pendingSuspend) return
 
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setLoading(true);
-    turnStateRef.current = { assistantText: "", assistantIndex: -1 };
+    setInput('')
+    setMessages((prev) => [...prev, { role: 'user', content: text }])
+    setLoading(true)
+    turnStateRef.current = { assistantText: '', assistantIndex: -1 }
 
     try {
-      const agent = client.getAgent("weather-agent");
-      const { resourceId, threadId } = idsRef.current!;
+      const agent = client.getAgent('weather-agent')
+      const { resourceId, threadId } = idsRef.current!
       await agent.sendMessage({
         message: text,
         resourceId,
         threadId,
         ifIdle: {
-          behavior: "wake",
+          behavior: 'wake',
           streamOptions: { clientTools },
         },
-      });
+      })
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Something went wrong";
+        err instanceof Error ? err.message : 'Something went wrong'
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Error: ${errorMessage}` },
-      ]);
-      setLoading(false);
+        { role: 'assistant', content: `Error: ${errorMessage}` },
+      ])
+      setLoading(false)
     }
   }
 
   async function handleApproval(approved: boolean) {
-    if (!pendingApproval) return;
-    const { toolCallId } = pendingApproval;
-    handledApprovalsRef.current.add(toolCallId);
-    setPendingApproval(null);
-    setLoading(true);
+    if (!pendingApproval) return
+    const { toolCallId } = pendingApproval
+    handledApprovalsRef.current.add(toolCallId)
+    setPendingApproval(null)
+    setLoading(true)
     try {
-      const agent = client.getAgent("weather-agent");
-      const { resourceId, threadId } = idsRef.current!;
+      const agent = client.getAgent('weather-agent')
+      const { resourceId, threadId } = idsRef.current!
       await agent.sendToolApproval({
         resourceId,
         threadId,
         toolCallId,
         approved,
         streamOptions: { clientTools },
-      });
+      })
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Something went wrong";
+        err instanceof Error ? err.message : 'Something went wrong'
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Error: ${errorMessage}` },
-      ]);
-      setLoading(false);
+        { role: 'assistant', content: `Error: ${errorMessage}` },
+      ])
+      setLoading(false)
     }
   }
 
-  async function handleFocus(focus: "indoor" | "outdoor") {
-    if (!pendingSuspend) return;
-    const { runId, toolCallId } = pendingSuspend;
-    const { resourceId, threadId } = idsRef.current!;
-    handledSuspendsRef.current.add(toolCallId);
-    setPendingSuspend(null);
-    setLoading(true);
+  async function handleFocus(focus: 'indoor' | 'outdoor') {
+    if (!pendingSuspend) return
+    const { runId, toolCallId } = pendingSuspend
+    const { resourceId, threadId } = idsRef.current!
+    handledSuspendsRef.current.add(toolCallId)
+    setPendingSuspend(null)
+    setLoading(true)
     try {
       // resume-stream chunks ALSO flow through the thread subscription, so we
       // just trigger the server-side execution here and let the subscription
       // deliver the chunks. The response body must still be drained — if we
       // cancel() it, the server pauses generation and we get stuck.
-      const res = await (client as unknown as {
-        request: (path: string, options: { method: string; body: unknown; stream?: boolean }) => Promise<Response>;
-      }).request("/agents/weather-agent/resume-stream", {
-        method: "POST",
+      const res = await (
+        client as unknown as {
+          request: (
+            path: string,
+            options: { method: string; body: unknown; stream?: boolean }
+          ) => Promise<Response>
+        }
+      ).request('/agents/weather-agent/resume-stream', {
+        method: 'POST',
         stream: true,
         body: {
           runId,
@@ -320,26 +389,26 @@ export default function Home() {
           memory: { thread: threadId, resource: resourceId },
           clientTools,
         },
-      });
+      })
       if (res.body) {
-        const reader = res.body.getReader();
-        (async () => {
+        const reader = res.body.getReader()
+        ;(async () => {
           try {
             while (true) {
-              const { done } = await reader.read();
-              if (done) break;
+              const { done } = await reader.read()
+              if (done) break
             }
           } catch {}
-        })();
+        })()
       }
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Something went wrong";
+        err instanceof Error ? err.message : 'Something went wrong'
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Error: ${errorMessage}` },
-      ]);
-      setLoading(false);
+        { role: 'assistant', content: `Error: ${errorMessage}` },
+      ])
+      setLoading(false)
     }
   }
 
@@ -356,9 +425,12 @@ export default function Home() {
             {msg.content}
           </div>
         ))}
-        {loading && !pendingApproval && !pendingSuspend && messages[messages.length - 1]?.role === "user" && (
-          <div className="message assistant">Thinking...</div>
-        )}
+        {loading &&
+          !pendingApproval &&
+          !pendingSuspend &&
+          messages[messages.length - 1]?.role === 'user' && (
+            <div className="message assistant">Thinking...</div>
+          )}
         {pendingApproval && (
           <div className="approval-card">
             <div className="approval-title">
@@ -380,12 +452,15 @@ export default function Home() {
             <div className="suspend-question">{pendingSuspend.question}</div>
             <div className="suspend-forecast">
               <span>{pendingSuspend.forecast.condition}</span>
-              <span>{pendingSuspend.forecast.minTemp.toFixed(1)}°–{pendingSuspend.forecast.maxTemp.toFixed(1)}°C</span>
+              <span>
+                {pendingSuspend.forecast.minTemp.toFixed(1)}°–
+                {pendingSuspend.forecast.maxTemp.toFixed(1)}°C
+              </span>
               <span>{pendingSuspend.forecast.precipitationChance}% precip</span>
             </div>
             <div className="suspend-actions">
-              <button onClick={() => handleFocus("outdoor")}>🌳 Outdoor</button>
-              <button onClick={() => handleFocus("indoor")}>🏠 Indoor</button>
+              <button onClick={() => handleFocus('outdoor')}>🌳 Outdoor</button>
+              <button onClick={() => handleFocus('indoor')}>🏠 Indoor</button>
             </div>
           </div>
         )}
@@ -400,12 +475,15 @@ export default function Home() {
           placeholder="What's the weather in Tokyo?"
           disabled={loading || !!pendingApproval || !!pendingSuspend}
         />
-        <button type="submit" disabled={loading || !!pendingApproval || !!pendingSuspend}>
+        <button
+          type="submit"
+          disabled={loading || !!pendingApproval || !!pendingSuspend}
+        >
           Send
         </button>
       </form>
 
       {effect && <div className="effect-label">{effect}</div>}
     </div>
-  );
+  )
 }
