@@ -103,9 +103,22 @@ const setWeatherVibes = {
   },
 };
 
+const clientTools = { setWeatherVibes };
+
 interface Message {
   role: "user" | "assistant" | "tool";
   content: string;
+}
+
+interface PendingApproval {
+  runId: string;
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+}
+
+function newId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 }
 
 export default function Home() {
@@ -113,62 +126,148 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [effect, setEffect] = useState("");
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const turnStateRef = useRef<{ assistantText: string; assistantIndex: number }>({
+    assistantText: "",
+    assistantIndex: -1,
+  });
+  const handledApprovalsRef = useRef<Set<string>>(new Set());
+  const idsRef = useRef<{ resourceId: string; threadId: string } | null>(null);
+  if (!idsRef.current) {
+    idsRef.current = { resourceId: newId("user"), threadId: newId("thread") };
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const { resourceId, threadId } = idsRef.current!;
+    const agent = client.getAgent("weather-agent");
+    let cancelled = false;
+    let subscription: Awaited<ReturnType<typeof agent.subscribeToThread>> | null = null;
+
+    (async () => {
+      try {
+        subscription = await agent.subscribeToThread({ resourceId, threadId });
+        if (cancelled) {
+          subscription.unsubscribe?.();
+          return;
+        }
+        // Fire-and-forget: this resolves only when the subscription is closed.
+        void subscription.processDataStream({
+          reconnect: true,
+          onChunk: async (chunk) => {
+            if (chunk.type === "tool-call" || chunk.type === "tool-call-approval") {
+              console.log("[chunk]", chunk.type, (chunk.payload as { toolName?: string; args?: unknown })?.toolName, (chunk.payload as { args?: unknown })?.args);
+            } else if (chunk.type === "tool-result") {
+              const p = chunk.payload as { toolName?: string; toolCallId?: string; result?: unknown };
+              console.log("[chunk]", chunk.type, p?.toolName, p?.toolCallId, p?.result);
+            } else {
+              console.log("[chunk]", chunk.type);
+            }
+            if (chunk.type === "text-delta") {
+              turnStateRef.current.assistantText += chunk.payload.text;
+              const text = turnStateRef.current.assistantText;
+              setMessages((prev) => {
+                const updated = [...prev];
+                if (turnStateRef.current.assistantIndex === -1) {
+                  turnStateRef.current.assistantIndex = updated.length;
+                  updated.push({ role: "assistant", content: text });
+                } else {
+                  updated[turnStateRef.current.assistantIndex] = {
+                    role: "assistant",
+                    content: text,
+                  };
+                }
+                return updated;
+              });
+            } else if (chunk.type === "tool-result") {
+              const result = chunk.payload.result as {
+                success?: boolean;
+                effect?: string;
+              };
+              if (result?.effect) {
+                setEffect(result.effect);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "tool", content: `Atmosphere set: ${result.effect}` },
+                ]);
+              }
+            } else if (chunk.type === "tool-call-approval") {
+              const payload = chunk.payload as {
+                toolCallId: string;
+                toolName: string;
+                args: unknown;
+              };
+              const runId = (chunk as { runId?: string }).runId;
+              if (runId) {
+                // Dedupe: ignore if we've already shown approval for this toolCallId
+                // (defends against server replay or duplicate chunks).
+                setPendingApproval((prev) => {
+                  if (prev?.toolCallId === payload.toolCallId) {
+                    console.warn("[approval] duplicate tool-call-approval ignored:", payload.toolCallId);
+                    return prev;
+                  }
+                  if (handledApprovalsRef.current.has(payload.toolCallId)) {
+                    console.warn("[approval] tool-call-approval re-arrived after handling:", payload.toolCallId);
+                    return prev;
+                  }
+                  return {
+                    runId,
+                    toolCallId: payload.toolCallId,
+                    toolName: payload.toolName,
+                    args: payload.args,
+                  };
+                });
+                setLoading(false);
+              }
+            } else if (chunk.type === "finish") {
+              const reason = (chunk.payload as { stepResult?: { reason?: string } })?.stepResult?.reason;
+              if (reason !== "tool-calls") {
+                setLoading(false);
+              }
+            }
+          },
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Subscription error:", err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe?.();
+    };
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || pendingApproval) return;
 
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
+    turnStateRef.current = { assistantText: "", assistantIndex: -1 };
 
     try {
       const agent = client.getAgent("weather-agent");
-      const response = await agent.stream(text, {
-        clientTools: { setWeatherVibes },
-      });
-
-      let assistantText = "";
-      let assistantIndex = -1;
-
-      await response.processDataStream({
-        onChunk: async (chunk) => {
-          if (chunk.type === "text-delta") {
-            assistantText += chunk.payload.text;
-            setMessages((prev) => {
-              const updated = [...prev];
-              if (assistantIndex === -1) {
-                assistantIndex = updated.length;
-                updated.push({ role: "assistant", content: assistantText });
-              } else {
-                updated[assistantIndex] = {
-                  role: "assistant",
-                  content: assistantText,
-                };
-              }
-              return updated;
-            });
-          } else if (chunk.type === "tool-result") {
-            const result = chunk.payload.result as {
-              success: boolean;
-              effect: string;
-            };
-            if (result?.effect) {
-              setEffect(result.effect);
-              setMessages((prev) => [
-                ...prev,
-                { role: "tool", content: `Atmosphere set: ${result.effect}` },
-              ]);
-            }
-          }
+      const { resourceId, threadId } = idsRef.current!;
+      console.log("[sendMessage]", text);
+      const result = await agent.sendMessage({
+        message: text,
+        resourceId,
+        threadId,
+        ifIdle: {
+          behavior: "wake",
+          streamOptions: { clientTools },
         },
       });
+      console.log("[sendMessage] response", result);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong";
@@ -176,7 +275,35 @@ export default function Home() {
         ...prev,
         { role: "assistant", content: `Error: ${errorMessage}` },
       ]);
-    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleApproval(approved: boolean) {
+    if (!pendingApproval) return;
+    const { toolCallId } = pendingApproval;
+    handledApprovalsRef.current.add(toolCallId);
+    setPendingApproval(null);
+    setLoading(true);
+    try {
+      const agent = client.getAgent("weather-agent");
+      const { resourceId, threadId } = idsRef.current!;
+      console.log("[approval] sending", { approved, toolCallId });
+      const result = await agent.sendToolApproval({
+        resourceId,
+        threadId,
+        toolCallId,
+        approved,
+        streamOptions: { clientTools },
+      });
+      console.log("[approval] response", result);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${errorMessage}` },
+      ]);
       setLoading(false);
     }
   }
@@ -194,8 +321,24 @@ export default function Home() {
             {msg.content}
           </div>
         ))}
-        {loading && messages[messages.length - 1]?.role === "user" && (
+        {loading && !pendingApproval && messages[messages.length - 1]?.role === "user" && (
           <div className="message assistant">Thinking...</div>
+        )}
+        {pendingApproval && (
+          <div className="approval-card">
+            <div className="approval-title">
+              Approve <code>{pendingApproval.toolName}</code>?
+            </div>
+            <pre className="approval-args">
+              {JSON.stringify(pendingApproval.args, null, 2)}
+            </pre>
+            <div className="approval-actions">
+              <button onClick={() => handleApproval(true)}>Approve</button>
+              <button onClick={() => handleApproval(false)} className="decline">
+                Decline
+              </button>
+            </div>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -206,9 +349,9 @@ export default function Home() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="What's the weather in Tokyo?"
-          disabled={loading}
+          disabled={loading || !!pendingApproval}
         />
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading || !!pendingApproval}>
           Send
         </button>
       </form>

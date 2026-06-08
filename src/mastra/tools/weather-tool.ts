@@ -35,6 +35,7 @@ export const weatherTool = createTool({
     conditions: z.string(),
     location: z.string(),
   }),
+  requireApproval: true,
   execute: async (inputData) => {
     return await getWeather(inputData.location);
   },

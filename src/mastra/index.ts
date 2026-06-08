@@ -1,25 +1,44 @@
-
-import { Mastra } from '@mastra/core/mastra';
-import { PinoLogger } from '@mastra/loggers';
-import { LibSQLStore } from '@mastra/libsql';
-import { Observability, MastraStorageExporter, MastraPlatformExporter, SensitiveDataFilter } from '@mastra/observability';
-import { weatherWorkflow } from './workflows/weather-workflow';
-import { weatherAgent } from './agents/weather-agent';
-import { codeReviewAgent } from './agents/code-review-agent';
-import { codingAgent } from './agents/coding-agent';
-import { codeResearchAgent } from './agents/code-research-agent';
-import { codePlanningAgent } from './agents/code-planning-agent';
-import { codeAssistant } from './agents/code-assistant';
-import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
+import { Mastra } from '@mastra/core/mastra'
+import { PinoLogger } from '@mastra/loggers'
+import { LibSQLStore } from '@mastra/libsql'
+import {
+  Observability,
+  MastraStorageExporter,
+  MastraPlatformExporter,
+  SensitiveDataFilter,
+} from '@mastra/observability'
+import { weatherWorkflow } from './workflows/weather-workflow'
+import { weatherAgent } from './agents/weather-agent'
+import { codeReviewAgent } from './agents/code-review-agent'
+import { codingAgent } from './agents/coding-agent'
+import { codeResearchAgent } from './agents/code-research-agent'
+import { codePlanningAgent } from './agents/code-planning-agent'
+import { codeAssistant } from './agents/code-assistant'
+import {
+  toolCallAppropriatenessScorer,
+  completenessScorer,
+  translationScorer,
+} from './scorers/weather-scorer'
 
 export const mastra = new Mastra({
   workflows: { weatherWorkflow },
-  agents: { weatherAgent, codeReviewAgent, codingAgent, codeResearchAgent, codePlanningAgent, codeAssistant },
-  scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
+  agents: {
+    weatherAgent,
+    codeReviewAgent,
+    codingAgent,
+    codeResearchAgent,
+    codePlanningAgent,
+    codeAssistant,
+  },
+  scorers: {
+    toolCallAppropriatenessScorer,
+    completenessScorer,
+    translationScorer,
+  },
   storage: new LibSQLStore({
-    id: "mastra-storage",
+    id: 'mastra-storage',
     // stores observability, scores, ... into persistent file storage
-    url: "file:./mastra.db",
+    url: 'file:./mastra.db',
   }),
   logger: new PinoLogger({
     name: 'Mastra',
@@ -39,4 +58,4 @@ export const mastra = new Mastra({
       },
     },
   }),
-});
+})
