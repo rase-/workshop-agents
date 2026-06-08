@@ -368,28 +368,23 @@ export default function Home() {
     setPendingSuspend(null)
     setLoading(true)
     try {
-      // resume-stream chunks ALSO flow through the thread subscription, so we
-      // just trigger the server-side execution here and let the subscription
-      // deliver the chunks. The response body must still be drained — if we
-      // cancel() it, the server pauses generation and we get stuck.
-      const res = await (
-        client as unknown as {
-          request: (
-            path: string,
-            options: { method: string; body: unknown; stream?: boolean }
-          ) => Promise<Response>
-        }
-      ).request('/agents/weather-agent/resume-stream', {
-        method: 'POST',
-        stream: true,
-        body: {
+      // resume-stream chunks flow through the thread subscription, so we
+      // just trigger the server here and let the subscription deliver. We
+      // still drain the response body so the server keeps streaming —
+      // cancelling it would pause generation. NOTE: client-js pipes the body
+      // through processChatResponse_vNext internally, which logs one
+      // "tool_result must be preceded by a tool_call" console.error on the
+      // first resumed tool-result — it's caught internally and harmless.
+      const agent = client.getAgent('weather-agent')
+      const res = await agent.resumeStream(
+        { focus },
+        {
           runId,
           toolCallId,
-          resumeData: { focus },
-          memory: { thread: threadId, resource: resourceId },
           clientTools,
-        },
-      })
+          memory: { thread: threadId, resource: resourceId },
+        }
+      )
       if (res.body) {
         const reader = res.body.getReader()
         ;(async () => {
