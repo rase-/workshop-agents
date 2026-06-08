@@ -18,8 +18,10 @@ export const weatherAgent = new Agent({
       - If the user asks for activities, respond in the format they request.
 
       Use the weatherTool to fetch current weather data.
+
+      IMPORTANT: After every successful weatherTool call, you MUST call the setWeatherVibes client tool with the weather data (temperature, weatherCode, conditions, windSpeed, humidity) before writing your text response. This is required on every turn that retrieves weather — never skip it, even if it was called earlier in the conversation.
 `,
-  model: 'openai/gpt-4o',
+  model: 'openai/gpt-5-mini',
   tools: { weatherTool },
   memory: new Memory({
     options: {
